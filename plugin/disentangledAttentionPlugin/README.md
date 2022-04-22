@@ -4,11 +4,7 @@
   - [Description](#description)
   - [Structure](#structure)
     - [Input(s)](#inputs)
-      - [Content-to-content Attention Matrix ("c2c")](#content-to-content-attention-matrix-c2c)
-      - [Content-to-position Attention Matrix ("c2p")](#content-to-position-attention-matrix-c2p)
-      - [Position-to-content Attention Matrix ("p2c")](#position-to-content-attention-matrix-p2c)
     - [Output(s)](#outputs)
-      - [Disentangled Attention Matrix](#disentangled-attention-matrix)
     - [Parameters](#parameters)
   - [Additional Resources](#additional-resources)
   - [License](#license)
@@ -22,43 +18,45 @@ Unlike [BERT](https://arxiv.org/abs/1810.04805) where each word is represented b
 This TensorRT plugin is primarily intended to be used together with DeBERTa network, but also applies to generic architectures that adopt disentangeld attention.
 
 ## Structure
-This plugin works for network with graph node named `DisentangledAttentionPlugin`.
+This plugin works for network with graph node named `DisentangledAttention_TRT`.
 
 ### Input(s)
 This plugin takes three inputs:
 
-#### Content-to-content Attention Matrix ("c2c")
+* `d_data0`: Content-to-content ("c2c") Attention Matrix
 
-> **Input Shape:** `[batch_size*number_heads, sequence_length, sequence_length]`
-> 
-> **Data Type:** `float32` or `float16` or `int8`
+  > **Input Shape:** `[batch_size*number_heads, sequence_length, sequence_length]`
+  > 
+  > **Data Type:** `float32` or `float16` or `int8`
 
-This is the self-attention matrix.
+  This is the content-to-content attention, Q<sub>c</sub>K<sub>c</sub><sup>T</sup>, which is essentially the BERT self-attention.
 
-#### Content-to-position Attention Matrix ("c2p")
+* `d_data1`: Content-to-position ("c2p") Attention Matrix
 
-> **Input Shape:** `[batch_size*number_heads, sequence_length, relative_distance*2]`
-> 
-> **Data Type:** `float32` or `float16` or `int8`
+  > **Input Shape:** `[batch_size*number_heads, sequence_length, relative_distance*2]`
+  > 
+  > **Data Type:** `float32` or `float16` or `int8`
 
-#### Position-to-content Attention Matrix ("p2c")
+  This is the content-to-position attention, Q<sub>c</sub>K<sub>r</sub><sup>T</sup>.
 
-> **Input Shape:** `[batch_size*number_heads, sequence_length,  relative_distance*2]`
-> 
-> **Data Type:** `float32` or `float16` or `int8`
+* `d_data2`: Position-to-content ("p2c") Attention Matrix
 
-Relative distance is the distance span `k` for disentangled attention.
+  > **Input Shape:** `[batch_size*number_heads, sequence_length,  relative_distance*2]`
+  > 
+  > **Data Type:** `float32` or `float16` or `int8`
+
+   This is the position-to-content attention, K<sub>c</sub>Q<sub>r</sub><sup>T</sup>. Relative distance is the distance span `k` for disentangled attention.
 
 ### Output(s)
 This plugin generates one output.
 
-#### Disentangled Attention Matrix
+* `d_result`: Disentangled Attention Matrix
 
-> **Input Shape:** `[batch_size*number_heads, sequence_length, sequence_length]`
-> 
-> **Data Type:** `float32` or `float16` or `int8`
+  > **Input Shape:** `[batch_size*number_heads, sequence_length, sequence_length]`
+  > 
+  > **Data Type:** `float32` or `float16` or `int8`
 
-This is the disentangled attention matrix after applying the scaling factor.
+  This is the disentangled attention matrix after applying the scaling factor.
 
 ### Parameters
 | Type     | Parameter                | Description

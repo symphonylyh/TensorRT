@@ -12,7 +12,7 @@
 | [cropAndResizePlugin](cropAndResizePlugin) | CropAndResize | 1 |
 | [decodeBbox3DPlugin](decodeBbox3DPlugin) | DecodeBbox3DPlugin | 1 |
 | [detectionLayerPlugin](detectionLayerPlugin) | DetectionLayer_TRT | 1 |
-| [disentangledAttentionPlugin](disentangledAttentionPlugin) | DisentangledAttentionPlugin | 1 |
+| [disentangledAttentionPlugin](disentangledAttentionPlugin) | DisentangledAttention_TRT | 1 |
 | [efficientNMSPlugin](efficientNMSPlugin) | EfficientNMS_TRT | 1 |
 | [efficientNMSONNXPlugin](efficientNMSPlugin) | EfficientNMS_ONNX_TRT | 1 |
 | [embLayerNormPlugin](embLayerNormPlugin) | CustomEmbLayerNormPluginDynamic | 1, 2 |
@@ -27,6 +27,7 @@
 | [leakyReluPlugin](leakyReluPlugin) | LReLU_TRT | 1 |
 | [multilevelCropAndResizePlugin](multilevelCropAndResizePlugin) | MultilevelCropAndResize_TRT | 1 |
 | [multilevelProposeROI](multilevelProposeROI) | MultilevelProposeROI_TRT | 1 |
+| [multiscaleDeformableAttnPlugin](multiscaleDeformableAttnPlugin) | DMHA | 1 |
 | [nmsPlugin](nmsPlugin) | NMS_TRT | 1 |
 | [normalizePlugin](normalizePlugin) | Normalize_TRT | 1 |
 | [nvFasterRCNN](nvFasterRCNN) | RPROI_TRT | 1 |

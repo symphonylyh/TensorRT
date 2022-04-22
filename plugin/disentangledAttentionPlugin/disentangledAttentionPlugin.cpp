@@ -45,7 +45,7 @@ REGISTER_TENSORRT_PLUGIN(DisentangledAttentionPluginCreator);
 
 namespace
 {
-constexpr const char* DEBERTA_NAME{"DisentangledAttentionPlugin"};
+constexpr const char* DEBERTA_NAME{"DisentangledAttention_TRT"};
 constexpr const char* DEBERTA_VERSION{"1"};
 } // namespace
 
@@ -98,15 +98,15 @@ nvinfer1::DimsExprs DisentangledAttentionPlugin::getOutputDimensions(
 {
     nvinfer1::DimsExprs output;
     if constexpr(VERSION == 1) {
-        assert(nbInputs == 4); // 4 inputs
+        ASSERT(nbInputs == 4); // 4 inputs
         output = inputs[1]; // same as input[1] or input[3], i.e. index1 or index2
     }
     else if constexpr (VERSION == 2) {
-        assert(nbInputs == 3); // 3 inputs
+        ASSERT(nbInputs == 3); // 3 inputs
         output = inputs[0]; // same as input[0], i.e. data0
     }
 
-    assert(index < 1); // only one output
+    ASSERT(index < 1); // only one output
 
     return output;
 }
@@ -214,7 +214,7 @@ bool DisentangledAttentionPlugin::supportsFormatCombination(
     int pos, const nvinfer1::PluginTensorDesc* inOut, int nbInputs, int nbOutputs) noexcept
 {
     
-    assert(inOut && pos < (nbInputs + nbOutputs));
+    ASSERT(inOut && pos < (nbInputs + nbOutputs));
 
     const bool consistentFloatPrecision = (inOut[pos].type == inOut[0].type); // all inputs & outputs should have the same precision type
 
@@ -254,17 +254,75 @@ IPluginV2DynamicExt* DisentangledAttentionPlugin::clone() const noexcept
 void DisentangledAttentionPlugin::configurePlugin(const nvinfer1::DynamicPluginTensorDesc* in, int nbInputs,
     const nvinfer1::DynamicPluginTensorDesc* out, int nbOutputs) noexcept
 {
-    if constexpr(VERSION == 1)
-        assert(nbInputs == 4); // 4 inputs
-    else if constexpr (VERSION == 2)
-        assert(nbInputs == 3); // 3 inputs
-    assert(nbOutputs == 1);
+    if constexpr(VERSION == 1) {
+        // inputs
+        ASSERT(nbInputs == 4); // 4 inputs
+        
+        // check for valid input dimensions
+        ASSERT(in[0].desc.dims.nbDims == 3);
+        ASSERT(in[1].desc.dims.nbDims == 3);
+        ASSERT(in[2].desc.dims.nbDims == 3);
+        ASSERT(in[3].desc.dims.nbDims == 3);
+
+        // check BN (batch_size * num_heads) dimension consistency
+        ASSERT(in[0].desc.dims.d[0] == in[1].desc.dims.d[0]);
+        ASSERT(in[0].desc.dims.d[0] == in[2].desc.dims.d[0]);
+        ASSERT(in[0].desc.dims.d[0] == in[3].desc.dims.d[0]);
+
+        // check S (sequence_length) dimension consistency
+        ASSERT(in[0].desc.dims.d[1] == in[1].desc.dims.d[1]);
+        ASSERT(in[0].desc.dims.d[1] == in[2].desc.dims.d[1]);
+        ASSERT(in[0].desc.dims.d[1] == in[3].desc.dims.d[1]);
+        ASSERT(in[1].desc.dims.d[1] == in[1].desc.dims.d[2]);
+        ASSERT(in[3].desc.dims.d[1] == in[3].desc.dims.d[2]);
+
+        // check K (2 * span) dimension consistency for in[0] and in[2]
+        ASSERT(in[0].desc.dims.d[2] == 2 * mSpan);
+        ASSERT(in[2].desc.dims.d[2] == 2 * mSpan);
+
+        // Outputs (same dimension as in[1])
+        ASSERT(nbOutputs == 1);
+        ASSERT(out[0].desc.dims.nbDims == 3);
+        ASSERT(in[1].desc.dims.d[0] == out[0].desc.dims.d[0]);
+        ASSERT(in[1].desc.dims.d[1] == out[0].desc.dims.d[1]);
+        ASSERT(in[1].desc.dims.d[2] == out[0].desc.dims.d[2]);
+    }
+    else if constexpr (VERSION == 2) {
+        // inputs
+        ASSERT(nbInputs == 3); // 3 inputs
+        
+        // check for valid input dimensions
+        ASSERT(in[0].desc.dims.nbDims == 3);
+        ASSERT(in[1].desc.dims.nbDims == 3);
+        ASSERT(in[2].desc.dims.nbDims == 3);
+
+        // check BN (batch_size * num_heads) dimension consistency
+        ASSERT(in[0].desc.dims.d[0] == in[1].desc.dims.d[0]);
+        ASSERT(in[0].desc.dims.d[0] == in[2].desc.dims.d[0]);
+
+        // check S (sequence_length) dimension consistency
+        ASSERT(in[0].desc.dims.d[1] == in[1].desc.dims.d[1]);
+        ASSERT(in[0].desc.dims.d[1] == in[2].desc.dims.d[1]);
+        ASSERT(in[0].desc.dims.d[1] == in[0].desc.dims.d[2]);
+
+        // check K (2 * span) dimension consistency for in[1] and in[2]
+        ASSERT(in[1].desc.dims.d[2] == 2 * mSpan);
+        ASSERT(in[2].desc.dims.d[2] == 2 * mSpan);
+
+        // Outputs (same dimension as in[0])
+        ASSERT(nbOutputs == 1);
+        ASSERT(out[0].desc.dims.nbDims == 3);
+        ASSERT(in[0].desc.dims.d[0] == out[0].desc.dims.d[0]);
+        ASSERT(in[0].desc.dims.d[1] == out[0].desc.dims.d[1]);
+        ASSERT(in[0].desc.dims.d[2] == out[0].desc.dims.d[2]);
+    }
+
 }
 
 nvinfer1::DataType DisentangledAttentionPlugin::getOutputDataType(
     int index, const nvinfer1::DataType* inputTypes, int nbInputs) const noexcept
 {
-    assert(inputTypes && nbInputs > 0 && index < 1);
+    ASSERT(inputTypes && nbInputs > 0 && index < 1);
     return inputTypes[0]; // version 1, same as data1; version 2, same as data0
 }
 
