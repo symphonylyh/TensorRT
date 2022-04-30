@@ -45,17 +45,15 @@ REGISTER_TENSORRT_PLUGIN(DisentangledAttentionPluginCreator);
 
 namespace
 {
-constexpr const char* DEBERTA_NAME{"DisentangledAttention_TRT"};
-constexpr const char* DEBERTA_VERSION{"1"};
+constexpr char const* DEBERTA_NAME{"DisentangledAttention_TRT"};
+constexpr char const* DEBERTA_VERSION{"1"};
 } // namespace
 
-DisentangledAttentionPlugin::DisentangledAttentionPlugin()
-{
-}
+DisentangledAttentionPlugin::DisentangledAttentionPlugin() {}
 
-DisentangledAttentionPlugin::DisentangledAttentionPlugin(int span, float factor)
-    : mSpan(span),
-      mFactor(factor)
+DisentangledAttentionPlugin::DisentangledAttentionPlugin(int32_t span, float factor)
+    : mSpan(span)
+    , mFactor(factor)
 {
 }
 
@@ -71,39 +69,43 @@ DisentangledAttentionPlugin::~DisentangledAttentionPlugin()
     terminate();
 }
 
-int DisentangledAttentionPlugin::getNbOutputs() const noexcept
+int32_t DisentangledAttentionPlugin::getNbOutputs() const noexcept
 {
     return 1;
 }
 
-int DisentangledAttentionPlugin::initialize() noexcept
+int32_t DisentangledAttentionPlugin::initialize() noexcept
 {
-    // if need large amount of GPU memory, recommend to specify in getWorkspaceSize so TRT allocates it. If not, when a plugin is called many times, the memory manually allocated by this initialize() is repeated many times -- may overflow
+    // if need large amount of GPU memory, recommend to specify in getWorkspaceSize so TRT allocates it. If not, when a
+    // plugin is called many times, the memory manually allocated by this initialize() is repeated many times -- may
+    // overflow
     return 0;
 }
 
-const char* DisentangledAttentionPlugin::getPluginType() const noexcept
+char const* DisentangledAttentionPlugin::getPluginType() const noexcept
 {
     return DEBERTA_NAME;
 }
 
-const char* DisentangledAttentionPlugin::getPluginVersion() const noexcept
+char const* DisentangledAttentionPlugin::getPluginVersion() const noexcept
 {
     return DEBERTA_VERSION;
 }
 
 // IPluginV2DynamicExt Methods
 nvinfer1::DimsExprs DisentangledAttentionPlugin::getOutputDimensions(
-    int index, const nvinfer1::DimsExprs* inputs, int nbInputs, nvinfer1::IExprBuilder& exprBuilder) noexcept
+    int32_t index, nvinfer1::DimsExprs const* inputs, int32_t nbInputs, nvinfer1::IExprBuilder& exprBuilder) noexcept
 {
     nvinfer1::DimsExprs output;
-    if constexpr(VERSION == 1) {
+    if (kDISENTANGLED_VERSION == 1)
+    {
         ASSERT(nbInputs == 4); // 4 inputs
         output = inputs[1]; // same as input[1] or input[3], i.e. index1 or index2
     }
-    else if constexpr (VERSION == 2) {
+    else if (kDISENTANGLED_VERSION == 2)
+    {
         ASSERT(nbInputs == 3); // 3 inputs
-        output = inputs[0]; // same as input[0], i.e. data0
+        output = inputs[0];           // same as input[0], i.e. data0
     }
 
     ASSERT(index < 1); // only one output
@@ -116,87 +118,95 @@ void DisentangledAttentionPlugin::attachToContext(cudnnContext* cudnnContext, cu
 }
 
 // Detach the plugin object from its execution context.
-void DisentangledAttentionPlugin::detachFromContext() noexcept
+void DisentangledAttentionPlugin::detachFromContext() noexcept {}
+
+template <typename TDataType>
+TDataType const* DisentangledAttentionPlugin::pointer_const_cast(void const* const p)
 {
+    return static_cast<TDataType const*>(p);
 }
 
-template<typename DataType>
-DataType const * DisentangledAttentionPlugin::pointer_const_cast(const void * const p)
+template <typename TDataType>
+TDataType* DisentangledAttentionPlugin::pointer_cast(void* const p)
 {
-    return static_cast<DataType const *>(p);
+    return static_cast<TDataType*>(p);
 }
 
-template<typename DataType>
-DataType * DisentangledAttentionPlugin::pointer_cast(void * const p)
-{
-    return static_cast<DataType *>(p);
-}
-
-int DisentangledAttentionPlugin::enqueue(const nvinfer1::PluginTensorDesc* inputDesc,
-    const nvinfer1::PluginTensorDesc* outputDesc, const void* const* inputs, void* const* outputs, void* workspace,
+int32_t DisentangledAttentionPlugin::enqueue(nvinfer1::PluginTensorDesc const* inputDesc,
+    nvinfer1::PluginTensorDesc const* outputDesc, void const* const* inputs, void* const* outputs, void* workspace,
     cudaStream_t stream) noexcept
 {
-    if constexpr (VERSION == 1) {
+    if (kDISENTANGLED_VERSION == 1)
+    {
         nvinfer1::Dims dims0 = inputDesc[0].dims;
         nvinfer1::Dims dims1 = inputDesc[1].dims;
         nvinfer1::Dims dims2 = inputDesc[2].dims;
         nvinfer1::Dims dims3 = inputDesc[3].dims;
-        dim3 dim_data1(dims0.d[0], dims0.d[1], dims0.d[2]);
-        dim3 dim_index1(dims1.d[0], dims1.d[1], dims1.d[2]);
-        dim3 dim_data2(dims2.d[0], dims2.d[1], dims2.d[2]);
-        dim3 dim_index2(dims3.d[0], dims3.d[1], dims3.d[2]);
-        dim3 dim_result(dim_index2);
+        dim3 dimData1(dims0.d[0], dims0.d[1], dims0.d[2]);
+        dim3 dimIndex1(dims1.d[0], dims1.d[1], dims1.d[2]);
+        dim3 dimData2(dims2.d[0], dims2.d[1], dims2.d[2]);
+        dim3 dimIndex2(dims3.d[0], dims3.d[1], dims3.d[2]);
+        dim3 dimResult(dimIndex2);
 
-        dim3 block_optimized( TileSize, BlockDimY );
-        dim3 grid_optimized( (dim_result.z-1)/TileSize+1, (dim_result.y-1)/TileSize+1, dim_result.x);
+        dim3 block_optimized( kDISENTANGLED_TILESIZE, kDISENTANGLED_BLOCKDIMY );
+        dim3 grid_optimized( (dimResult.z-1)/kDISENTANGLED_TILESIZE+1, (dimResult.y-1)/kDISENTANGLED_TILESIZE+1,
+        dimResult.x);
 
-        __half const *d_data1 = static_cast<__half const *>(inputs[0]);
-        int const *d_index1 = static_cast<int const *>(inputs[1]);
-        __half const *d_data2 = static_cast<__half const *>(inputs[2]);
-        int const * d_index2 = static_cast<int const *>(inputs[3]);
-        __half *d_result = static_cast<__half*>(outputs[0]);
+        __half const *data1 = static_cast<__half const *>(inputs[0]);
+        int32_t const *index1 = static_cast<int32_t const *>(inputs[1]);
+        __half const *data2 = static_cast<__half const *>(inputs[2]);
+        int32_t const * index2 = static_cast<int32_t const *>(inputs[3]);
+        __half *result = static_cast<__half*>(outputs[0]);
 
-        disentangled_kernel_wrapper_v1<__half>(d_data1, d_index1, d_data2, d_index2, d_result, dim_data1, dim_index1, dim_data2, dim_index2, dim_result, block_optimized, grid_optimized, stream);
+        disentangled_kernel_wrapper_v1<__half>(data1, index1, data2, index2, result, dimData1, dimIndex1,
+        dimData2, dimIndex2, dimResult, block_optimized, grid_optimized, stream);
     }
-    else if constexpr (VERSION == 2){
+    else if (kDISENTANGLED_VERSION == 2)
+    {
         nvinfer1::Dims dims0 = inputDesc[0].dims;
         nvinfer1::Dims dims1 = inputDesc[1].dims;
         nvinfer1::Dims dims2 = inputDesc[2].dims;
-        dim3 dim_data0(dims0.d[0], dims0.d[1], dims0.d[2]);
-        dim3 dim_data1(dims1.d[0], dims1.d[1], dims1.d[2]);
-        dim3 dim_data2(dims2.d[0], dims2.d[1], dims2.d[2]);
-        dim3 dim_result(dim_data0);
+        dim3 dimData0(dims0.d[0], dims0.d[1], dims0.d[2]);
+        dim3 dimData1(dims1.d[0], dims1.d[1], dims1.d[2]);
+        dim3 dimData2(dims2.d[0], dims2.d[1], dims2.d[2]);
+        dim3 dimResult(dimData0);
 
-        dim3 block_optimized( TileSize, BlockDimY );
-        dim3 grid_optimized( (dim_result.z-1)/TileSize+1, (dim_result.y-1)/TileSize+1, dim_result.x);
+        dim3 block_optimized(kDISENTANGLED_TILESIZE, kDISENTANGLED_BLOCKDIMY);
+        dim3 grid_optimized(
+            (dimResult.z - 1) / kDISENTANGLED_TILESIZE + 1, (dimResult.y - 1) / kDISENTANGLED_TILESIZE + 1, dimResult.x);
 
         if (inputDesc[0].type == nvinfer1::DataType::kFLOAT)
         {
-            auto const *d_data0 = pointer_const_cast<float>(inputs[0]);
-            auto const *d_data1 = pointer_const_cast<float>(inputs[1]);
-            auto const *d_data2 = pointer_const_cast<float>(inputs[2]);
-            auto *d_result = pointer_cast<float>(outputs[0]);
-            disentangled_kernel_wrapper_v2<float, TileSize, BlockDimY>(d_data0, d_data1, d_data2, d_result, dim_data0, dim_data1, dim_data2, dim_result, mFactor, mSpan, block_optimized, grid_optimized, stream);
+            auto const* data0 = pointer_const_cast<float>(inputs[0]);
+            auto const* data1 = pointer_const_cast<float>(inputs[1]);
+            auto const* data2 = pointer_const_cast<float>(inputs[2]);
+            auto* result = pointer_cast<float>(outputs[0]);
+            disentangled_kernel_wrapper_v2<float, kDISENTANGLED_TILESIZE, kDISENTANGLED_BLOCKDIMY>(data0, data1, data2,
+                result, dimData0, dimData1, dimData2, dimResult, mFactor, mSpan, block_optimized, grid_optimized, stream);
         }
-        else if (inputDesc[0].type == nvinfer1::DataType::kHALF) {
-            auto const *d_data0 = pointer_const_cast<__half>(inputs[0]);
-            auto const *d_data1 = pointer_const_cast<__half>(inputs[1]);
-            auto const *d_data2 = pointer_const_cast<__half>(inputs[2]);
-            auto *d_result = pointer_cast<__half>(outputs[0]);
+        else if (inputDesc[0].type == nvinfer1::DataType::kHALF)
+        {
+            auto const* data0 = pointer_const_cast<__half>(inputs[0]);
+            auto const* data1 = pointer_const_cast<__half>(inputs[1]);
+            auto const* data2 = pointer_const_cast<__half>(inputs[2]);
+            auto* result = pointer_cast<__half>(outputs[0]);
             __half factor = __float2half(mFactor);
-            disentangled_kernel_wrapper_v2<__half, TileSize, BlockDimY>(d_data0, d_data1, d_data2, d_result, dim_data0, dim_data1, dim_data2, dim_result, factor, mSpan, block_optimized, grid_optimized, stream);
+            disentangled_kernel_wrapper_v2<__half, kDISENTANGLED_TILESIZE, kDISENTANGLED_BLOCKDIMY>(data0, data1, data2,
+                result, dimData0, dimData1, dimData2, dimResult, factor, mSpan, block_optimized, grid_optimized, stream);
         }
-        else if (inputDesc[0].type == nvinfer1::DataType::kINT8) {
-            auto const *d_data0 = pointer_const_cast<int8_t>(inputs[0]);
-            auto const *d_data1 = pointer_const_cast<int8_t>(inputs[1]);
-            auto const *d_data2 = pointer_const_cast<int8_t>(inputs[2]);
-            auto *d_result = pointer_cast<int8_t>(outputs[0]);
+        else if (inputDesc[0].type == nvinfer1::DataType::kINT8)
+        {
+            auto const* data0 = pointer_const_cast<int8_t>(inputs[0]);
+            auto const* data1 = pointer_const_cast<int8_t>(inputs[1]);
+            auto const* data2 = pointer_const_cast<int8_t>(inputs[2]);
+            auto* result = pointer_cast<int8_t>(outputs[0]);
             int8_t factor = int8_t(mFactor);
-            disentangled_kernel_wrapper_v2<int8_t, TileSize, BlockDimY>(d_data0, d_data1, d_data2, d_result, dim_data0, dim_data1, dim_data2, dim_result, factor, mSpan, block_optimized, grid_optimized, stream);
+            disentangled_kernel_wrapper_v2<int8_t, kDISENTANGLED_TILESIZE, kDISENTANGLED_BLOCKDIMY>(data0, data1, data2,
+                result, dimData0, dimData1, dimData2, dimResult, factor, mSpan, block_optimized, grid_optimized, stream);
         }
     }
 
-    return cudaPeekAtLastError();  
+    return cudaPeekAtLastError();
 }
 
 size_t DisentangledAttentionPlugin::getSerializationSize() const noexcept
@@ -211,12 +221,13 @@ void DisentangledAttentionPlugin::serialize(void* buffer) const noexcept
 }
 
 bool DisentangledAttentionPlugin::supportsFormatCombination(
-    int pos, const nvinfer1::PluginTensorDesc* inOut, int nbInputs, int nbOutputs) noexcept
+    int32_t pos, nvinfer1::PluginTensorDesc const* inOut, int32_t nbInputs, int32_t nbOutputs) noexcept
 {
-    
+
     ASSERT(inOut && pos < (nbInputs + nbOutputs));
 
-    const bool consistentFloatPrecision = (inOut[pos].type == inOut[0].type); // all inputs & outputs should have the same precision type
+    bool const consistentFloatPrecision
+        = (inOut[pos].type == inOut[0].type); // all inputs & outputs should have the same precision type
 
     // 3 inputs, 1 output
     switch (pos)
@@ -246,18 +257,27 @@ void DisentangledAttentionPlugin::destroy() noexcept
 
 IPluginV2DynamicExt* DisentangledAttentionPlugin::clone() const noexcept
 {
-    auto* plugin = new DisentangledAttentionPlugin(mSpan, mFactor);
-    plugin->setPluginNamespace(mPluginNamespace);
-    return plugin;
+    try
+    {
+        auto* plugin = new DisentangledAttentionPlugin(mSpan, mFactor);
+        plugin->setPluginNamespace(mPluginNamespace);
+        return plugin;
+    }
+    catch (std::exception const& e)
+    {
+        caughtError(e);
+    }
+    return nullptr;
 }
 
-void DisentangledAttentionPlugin::configurePlugin(const nvinfer1::DynamicPluginTensorDesc* in, int nbInputs,
-    const nvinfer1::DynamicPluginTensorDesc* out, int nbOutputs) noexcept
+void DisentangledAttentionPlugin::configurePlugin(nvinfer1::DynamicPluginTensorDesc const* in, int32_t nbInputs,
+    nvinfer1::DynamicPluginTensorDesc const* out, int32_t nbOutputs) noexcept
 {
-    if constexpr(VERSION == 1) {
+    if (kDISENTANGLED_VERSION == 1)
+    {
         // inputs
         ASSERT(nbInputs == 4); // 4 inputs
-        
+
         // check for valid input dimensions
         ASSERT(in[0].desc.dims.nbDims == 3);
         ASSERT(in[1].desc.dims.nbDims == 3);
@@ -287,10 +307,11 @@ void DisentangledAttentionPlugin::configurePlugin(const nvinfer1::DynamicPluginT
         ASSERT(in[1].desc.dims.d[1] == out[0].desc.dims.d[1]);
         ASSERT(in[1].desc.dims.d[2] == out[0].desc.dims.d[2]);
     }
-    else if constexpr (VERSION == 2) {
+    else if (kDISENTANGLED_VERSION == 2)
+    {
         // inputs
         ASSERT(nbInputs == 3); // 3 inputs
-        
+
         // check for valid input dimensions
         ASSERT(in[0].desc.dims.nbDims == 3);
         ASSERT(in[1].desc.dims.nbDims == 3);
@@ -316,28 +337,27 @@ void DisentangledAttentionPlugin::configurePlugin(const nvinfer1::DynamicPluginT
         ASSERT(in[0].desc.dims.d[1] == out[0].desc.dims.d[1]);
         ASSERT(in[0].desc.dims.d[2] == out[0].desc.dims.d[2]);
     }
-
 }
 
 nvinfer1::DataType DisentangledAttentionPlugin::getOutputDataType(
-    int index, const nvinfer1::DataType* inputTypes, int nbInputs) const noexcept
+    int32_t index, nvinfer1::DataType const* inputTypes, int32_t nbInputs) const noexcept
 {
     ASSERT(inputTypes && nbInputs > 0 && index < 1);
     return inputTypes[0]; // version 1, same as data1; version 2, same as data0
 }
 
-size_t DisentangledAttentionPlugin::getWorkspaceSize(const nvinfer1::PluginTensorDesc* inputs, int nbInputs,
-    const nvinfer1::PluginTensorDesc* outputs, int nbOutputs) const noexcept
+size_t DisentangledAttentionPlugin::getWorkspaceSize(nvinfer1::PluginTensorDesc const* inputs, int32_t nbInputs,
+    nvinfer1::PluginTensorDesc const* outputs, int32_t nbOutputs) const noexcept
 {
     return 0;
 }
 
-void DisentangledAttentionPlugin::setPluginNamespace(const char* libNamespace) noexcept
+void DisentangledAttentionPlugin::setPluginNamespace(char const* libNamespace) noexcept
 {
     mPluginNamespace = libNamespace;
 }
 
-const char* DisentangledAttentionPlugin::getPluginNamespace() const noexcept
+char const* DisentangledAttentionPlugin::getPluginNamespace() const noexcept
 {
     return mPluginNamespace;
 }
@@ -354,60 +374,80 @@ DisentangledAttentionPluginCreator::DisentangledAttentionPluginCreator()
     mFC.fields = mPluginAttributes.data();
 }
 
-const char* DisentangledAttentionPluginCreator::getPluginName() const noexcept
+char const* DisentangledAttentionPluginCreator::getPluginName() const noexcept
 {
     return DEBERTA_NAME;
 }
 
-const char* DisentangledAttentionPluginCreator::getPluginVersion() const noexcept
+char const* DisentangledAttentionPluginCreator::getPluginVersion() const noexcept
 {
     return DEBERTA_VERSION;
 }
 
-const PluginFieldCollection* DisentangledAttentionPluginCreator::getFieldNames() noexcept
+PluginFieldCollection const* DisentangledAttentionPluginCreator::getFieldNames() noexcept
 {
     return &mFC;
 }
 
-const char* DisentangledAttentionPluginCreator::getPluginNamespace() const noexcept
+char const* DisentangledAttentionPluginCreator::getPluginNamespace() const noexcept
 {
     return mNamespace.c_str();
 }
 
-void DisentangledAttentionPluginCreator::setPluginNamespace(const char* libNamespace) noexcept
+void DisentangledAttentionPluginCreator::setPluginNamespace(char const* libNamespace) noexcept
 {
     mNamespace = libNamespace;
 }
 
-IPluginV2DynamicExt* DisentangledAttentionPluginCreator::createPlugin(const char* name, const PluginFieldCollection* fc) noexcept
+IPluginV2DynamicExt* DisentangledAttentionPluginCreator::createPlugin(
+    char const* name, PluginFieldCollection const* fc) noexcept
 {
-    // Set default values
-    int span{1};
-    float factor{0.00001F};
-    for (int i = 0; i < fc->nbFields; i++)
+    try
     {
-        std::string field_name(fc->fields[i].name);
-        if (field_name.compare("span") == 0)
+        // Set default invalid values (for assert in case when attributes are missing)
+        int32_t span = 0;
+        float factor = 0.0F;
+        for (int32_t i = 0; i < fc->nbFields; i++)
         {
-            span = *static_cast<const int*>(fc->fields[i].data);
+            std::string field_name(fc->fields[i].name);
+            if (field_name.compare("span") == 0)
+            {
+                span = *static_cast<int32_t const*>(fc->fields[i].data);
+            }
+            if (field_name.compare("factor") == 0)
+            {
+                factor = *static_cast<float const*>(fc->fields[i].data);
+            }
         }
-        if (field_name.compare("factor") == 0)
-        {
-            factor = *static_cast<const float*>(fc->fields[i].data);
-        }
+
+        ASSERT(span >= 0);
+        ASSERT(factor > 0.0F && factor < 1.0F); // factor is 1/sqrt(3d), therefore must less than 1
+
+        DisentangledAttentionPlugin* plugin = new DisentangledAttentionPlugin(span, factor);
+        plugin->setPluginNamespace(mNamespace.c_str());
+
+        return plugin;
     }
-
-    DisentangledAttentionPlugin* plugin = new DisentangledAttentionPlugin(span, factor);
-    plugin->setPluginNamespace(mNamespace.c_str());
-
-    return plugin;
+    catch (std::exception const& e)
+    {
+        caughtError(e);
+    }
+    return nullptr;
 }
 
-IPluginV2DynamicExt* DisentangledAttentionPluginCreator::deserializePlugin(const char* name, const void* serialData, size_t serialLength) noexcept
+IPluginV2DynamicExt* DisentangledAttentionPluginCreator::deserializePlugin(
+    char const* name, void const* serialData, size_t serialLength) noexcept
 {
-    DisentangledAttentionPlugin* plugin = new DisentangledAttentionPlugin(serialData, serialLength);
-    plugin->setPluginNamespace(mNamespace.c_str());
+    try
+    {
+        DisentangledAttentionPlugin* plugin = new DisentangledAttentionPlugin(serialData, serialLength);
+        plugin->setPluginNamespace(mNamespace.c_str());
 
-    return plugin;
+        return plugin;
+    }
+    catch (std::exception const& e)
+    {
+        caughtError(e);
+    }
+    return nullptr;
 }
-

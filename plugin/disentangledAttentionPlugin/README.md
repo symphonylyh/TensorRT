@@ -23,7 +23,7 @@ This plugin works for network with graph node named `DisentangledAttention_TRT`.
 ### Input(s)
 This plugin takes three inputs:
 
-* `d_data0`: Content-to-content ("c2c") Attention Matrix
+* `data0`: Content-to-content ("c2c") Attention Matrix
 
   > **Input Shape:** `[batch_size*number_heads, sequence_length, sequence_length]`
   > 
@@ -31,7 +31,7 @@ This plugin takes three inputs:
 
   This is the content-to-content attention, Q<sub>c</sub>K<sub>c</sub><sup>T</sup>, which is essentially the BERT self-attention.
 
-* `d_data1`: Content-to-position ("c2p") Attention Matrix
+* `data1`: Content-to-position ("c2p") Attention Matrix
 
   > **Input Shape:** `[batch_size*number_heads, sequence_length, relative_distance*2]`
   > 
@@ -39,7 +39,7 @@ This plugin takes three inputs:
 
   This is the content-to-position attention, Q<sub>c</sub>K<sub>r</sub><sup>T</sup>.
 
-* `d_data2`: Position-to-content ("p2c") Attention Matrix
+* `data2`: Position-to-content ("p2c") Attention Matrix
 
   > **Input Shape:** `[batch_size*number_heads, sequence_length,  relative_distance*2]`
   > 
@@ -50,7 +50,7 @@ This plugin takes three inputs:
 ### Output(s)
 This plugin generates one output.
 
-* `d_result`: Disentangled Attention Matrix
+* `result`: Disentangled Attention Matrix
 
   > **Input Shape:** `[batch_size*number_heads, sequence_length, sequence_length]`
   > 
@@ -62,7 +62,7 @@ This plugin generates one output.
 | Type     | Parameter                | Description
 |----------|--------------------------|--------------------------------------------------------
 |`int`   |`span`      | The distance span `k` for relative position. Scalar.
-|`float`   |`factor`           | The scaling factor (multiply) to be applied to the attention weights. Scalar.
+|`float`   |`factor`           | The scaling factor (multiply) to be applied to the attention weights, `1/sqrt(3d)`, where `d` is hidden size per head `H/N`. `H` is hidden size, `N` is number of heads. Scalar (less than 1).
 
 ## Additional Resources
 - [BERT](https://arxiv.org/abs/1810.04805)
